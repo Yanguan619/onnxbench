@@ -11,9 +11,17 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "env-filter",
     "fmt",
 ] }
-image = "0.25"
-show-image = { version = "=0.14.0", features = ["image", "raqote"] }
-raqote = { version = "0.8", default-features = false }
+# image = "0.25"
+# show-image = { version = "=0.14.0", features = ["image", "raqote"] }
+# raqote = { version = "0.8", default-features = false }
 tracing = "0.1"
 ort = "=2.0.0-rc.9"
 indicatif = "0.17.11"
+
+
+[profile.release]
+panic = "abort"   # Strip expensive panic clean-up logic
+codegen-units = 1 # Compile crates one after another so the compiler can optimize better
+lto = true        # Enables link to optimizations
+opt-level = "z"   # Optimize for binary size
+strip = true      # Remove debug symbols
