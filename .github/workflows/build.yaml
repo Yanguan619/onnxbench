@@ -12,7 +12,6 @@ env:
 jobs:
   build:
     strategy:
-      # matrix上下文，包含在工作流中定义的应用于当前作业的矩阵属性
       matrix:
         include:
           - build: linux
