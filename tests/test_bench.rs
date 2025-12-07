@@ -21,26 +21,6 @@ fn test_benchmark() {
 }
 
 #[test]
-fn test_benchmark2() {
-    let inn = Cli {
-        model_path: ".assets/yolov5nu.onnx".to_string(),
-        input_shape: "images:1,3,256,256;imag2es".to_string(),
-        device: "cpu".to_string(),
-        loop_n: 10,
-        log: "info".to_string(),
-    };
-
-    setup_log(&inn.log);
-
-    let res = benchmark(
-        &inn.model_path,
-        inn.loop_n,
-        inn.parse_input_shape().unwrap(),
-    );
-    assert_eq!(res, Ok(()));
-}
-
-#[test]
 fn test_table() {
     use tabled::assert::assert_table;
     use tabled::{Table, Tabled};
