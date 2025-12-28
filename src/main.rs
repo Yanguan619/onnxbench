@@ -3,10 +3,11 @@
 use clap::Parser;
 use cli::Cli;
 use onnxbench::{benchmark, setup_log};
-use tracing::error;
+use tracing::{error, warn};
 mod cli;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     setup_log(&cli.log);
@@ -15,7 +16,10 @@ fn main() {
 
     match input_shape {
         Ok(shape) => {
-            let _res = benchmark(&cli.model_path, cli.loop_n, shape);
+            match benchmark(cli.model_path, cli.loop_n, shape, cli.device).await {
+                Ok(_) => {}
+                Err(e) => warn!("{:}", e),
+            };
         }
         Err(e) => {
             error!("{:}", e);

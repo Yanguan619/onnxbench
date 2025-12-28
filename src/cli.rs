@@ -10,7 +10,7 @@ use clap::Parser;
 pub struct Cli {
     #[arg(short, long, help = "e.g: .assets/yolov5nu.onnx")]
     pub model_path: String,
-    #[arg(short, long, help = "e.g: images:1,3,640,640")]
+    #[arg(short, long, default_value = "", help = "e.g: images:1,3,640,640")]
     pub input_shape: String,
     #[arg(long, default_value = "cpu")]
     pub device: String,
@@ -26,6 +26,10 @@ impl Cli {
         let x = self.input_shape.split(";").collect::<Vec<&str>>();
         for i in 0..x.len() {
             let temp: Vec<&str> = x[i].split(":").collect();
+
+            if self.input_shape.is_empty() {
+                return Ok(input_shape);
+            }
 
             if !x[i].contains(":") || temp[1].len() == 0 {
                 return Err("Parse `input-shape` arg failed!");

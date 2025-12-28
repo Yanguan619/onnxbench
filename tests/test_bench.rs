@@ -13,9 +13,10 @@ fn test_benchmark() {
     setup_log(&inn.log);
 
     let res = benchmark(
-        &inn.model_path,
+        inn.model_path,
         inn.loop_n,
         inn.parse_input_shape().unwrap(),
+        inn.device,
     );
     assert_eq!(res, Ok(()));
 }
