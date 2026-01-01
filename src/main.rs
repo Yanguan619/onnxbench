@@ -16,7 +16,7 @@ async fn main() {
 
     match input_shape {
         Ok(shape) => {
-            match benchmark(cli.model_path, cli.loop_n, shape, cli.device).await {
+            match benchmark(&cli.model_path, cli.loop_n, shape, &cli.device).await {
                 Ok(_) => {}
                 Err(e) => warn!("{:}", e),
             };

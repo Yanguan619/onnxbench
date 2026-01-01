@@ -1,7 +1,7 @@
 use onnxbench::{benchmark, cli::Cli, setup_log};
 
-#[test]
-fn test_benchmark() {
+#[tokio::test]
+async fn test_benchmark_bs1() {
     let inn = Cli {
         model_path: ".assets/yolov5nu.onnx".to_string(),
         input_shape: "images:1,3,640,640".to_string(),
@@ -13,11 +13,56 @@ fn test_benchmark() {
     setup_log(&inn.log);
 
     let res = benchmark(
-        inn.model_path,
+        &inn.model_path,
         inn.loop_n,
         inn.parse_input_shape().unwrap(),
-        inn.device,
-    );
+        &inn.device,
+    )
+    .await;
+    assert_eq!(res, Ok(()));
+}
+
+#[tokio::test]
+async fn test_benchmark() {
+    let inn = Cli {
+        model_path: ".assets/yolov5nu.onnx".to_string(),
+        input_shape: "images:8,3,640,640".to_string(),
+        device: "cpu".to_string(),
+        loop_n: 20,
+        log: "info".to_string(),
+    };
+
+    setup_log(&inn.log);
+
+    let res = benchmark(
+        &inn.model_path,
+        inn.loop_n,
+        inn.parse_input_shape().unwrap(),
+        &inn.device,
+    )
+    .await;
+    assert_eq!(res, Ok(()));
+}
+
+#[tokio::test]
+async fn test_benchmark_64() {
+    let inn = Cli {
+        model_path: ".assets/yolov5nu.onnx".to_string(),
+        input_shape: "".to_string(),
+        device: "cpu".to_string(),
+        loop_n: 20,
+        log: "info".to_string(),
+    };
+
+    setup_log(&inn.log);
+
+    let res = benchmark(
+        &inn.model_path,
+        inn.loop_n,
+        inn.parse_input_shape().unwrap(),
+        &inn.device,
+    )
+    .await;
     assert_eq!(res, Ok(()));
 }
 

@@ -12,15 +12,15 @@ use tabled::{Table, Tabled};
 use time::{format_description, UtcOffset};
 use tokio::signal;
 use tokio::sync::Mutex;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use tracing_subscriber::fmt::time::OffsetTime;
 pub mod cli;
 
 pub async fn benchmark(
-    model_path: String,
+    model_path: &String,
     loop_num: usize,
     mut input_shape: HashMap<String, Vec<usize>>,
-    device: String,
+    device: &String,
 ) -> Result<(), String> {
     // #[cfg(feature = "backend-candle")]
     // ort::set_api(ort_candle::api());
@@ -70,9 +70,7 @@ pub async fn benchmark(
         .commit()
         .unwrap();
 
-    info!("Device: {}", device);
-
-    let mut model = Session::builder()
+    let model = Session::builder()
         .unwrap()
         .with_optimization_level(GraphOptimizationLevel::Level3)
         .unwrap()
@@ -80,34 +78,60 @@ pub async fn benchmark(
         .unwrap();
 
     let use_dafault_input = input_shape.is_empty();
-    for inputi in &model.inputs {
+    let mut default_bs = 8;
+    let mut format = ArrayFormat::ND;
+
+    info!("Device: {}", device);
+    for input in &model.inputs {
+        let tensor_shape = input.input_type.tensor_shape().unwrap();
+        let mut vv = tensor_shape.to_vec();
+        if vv.len() == 4 {
+            format = ArrayFormat::BCHW;
+        }
         info!(
             "Model input name: {:?}, size: {:?}, dtype: {:?}",
-            inputi.name,
-            inputi.input_type.tensor_shape().unwrap(),
-            inputi.input_type.tensor_type().unwrap()
+            input.name,
+            tensor_shape,
+            input.input_type.tensor_type().unwrap()
         );
         if use_dafault_input {
+            if format == ArrayFormat::BCHW && vv.get(0) == Some(&-1) {
+                vv[0] = default_bs;
+            };
             input_shape.insert(
-                inputi.name.clone(),
-                inputi
-                    .input_type
-                    .tensor_shape()
-                    .unwrap()
-                    .to_vec()
-                    .iter()
+                input.name.clone(),
+                vv.iter()
                     .map(|x| if *x < 0 { 256 } else { *x as usize })
                     .collect(),
             );
         }
     }
 
+    for i in input_shape.values() {
+        if i.len() == 4 {
+            default_bs = i[0] as i64;
+        }
+    }
+
     if !use_dafault_input {
         info!("User input shape: {:?}", input_shape);
     } else {
-        info!("Default input shape: {:?}", input_shape);
+        warn!(
+            "User input shape is not provided, use default input shape: {:?}",
+            input_shape
+        );
     };
+    let res = forward(model, input_shape, default_bs, loop_num).await;
 
+    res
+}
+
+async fn forward(
+    mut model: Session,
+    input_shape: HashMap<String, Vec<usize>>,
+    bs: i64,
+    loop_num: usize,
+) -> Result<(), String> {
     let costs = Arc::new(Mutex::new(Vec::<Duration>::new()));
     let bar = Arc::new(ProgressBar::new(loop_num as u64));
     bar.set_style(
@@ -169,7 +193,6 @@ pub async fn benchmark(
     }
     let mut danwei = 1.0;
     let mut danweis = "s";
-
     let mean = costs.iter().sum::<Duration>().as_secs_f32() / num_finish as f32;
     if mean < 0.1 {
         danwei = 1_000.0;
@@ -186,6 +209,8 @@ pub async fn benchmark(
     } else {
         format!("{}/{}", num_finish, loop_num)
     };
+
+    let bs_f = bs as f32;
     let perf = vec![
         PerformanceSummary {
             label: Box::leak(format!("Cost time({})", danweis).into_boxed_str()),
@@ -199,23 +224,41 @@ pub async fn benchmark(
         },
         PerformanceSummary {
             label: "Throughput(tps)",
-            mean: round(danwei / mean, 3),
-            min: round(danwei / max, 3),
-            max: round(danwei / min, 3),
-            p90: round(danwei / p90, 3),
-            p95: round(danwei / p95, 3),
-            p99: round(danwei / p99, 3),
+            mean: bs_f * round(danwei / mean, 3),
+            min: bs_f * round(danwei / max, 3),
+            max: bs_f * round(danwei / min, 3),
+            p90: bs_f * round(danwei / p90, 3),
+            p95: bs_f * round(danwei / p95, 3),
+            p99: bs_f * round(danwei / p99, 3),
             num: num_label,
         },
     ];
     let table = Table::new(perf);
+    info!("Success benchmark, summary benchmark result.");
     println!("{:}", table);
-    info!("Success benchmark.");
     Ok(())
 }
 
-fn round(num: f32, round: u32) -> f32 {
-    (num * 10_i32.pow(round) as f32).round() / 10_i32.pow(round) as f32
+trait Round {
+    fn round_to(self, decimals: u32) -> Self;
+}
+
+impl Round for f32 {
+    fn round_to(self, decimals: u32) -> Self {
+        let multiplier = 10_f32.powi(decimals as i32);
+        (self * multiplier).round() / multiplier
+    }
+}
+
+impl Round for f64 {
+    fn round_to(self, decimals: u32) -> Self {
+        let multiplier = 10_f64.powi(decimals as i32);
+        (self * multiplier).round() / multiplier
+    }
+}
+
+fn round<T: Round>(num: T, decimals: u32) -> T {
+    num.round_to(decimals)
 }
 
 /// ms
@@ -260,13 +303,19 @@ pub fn setup_log(level: &String) {
     }
 }
 
-trait Ana {
+trait SummaryData {
     fn ana(&self, w: f32) -> Duration;
 }
 
-impl Ana for Vec<Duration> {
+impl SummaryData for Vec<Duration> {
     fn ana(&self, w: f32) -> Duration {
         let idx = ((self.len() as f32 * w) - 1.0).max(0.) as usize;
         self[idx]
     }
+}
+
+#[derive(PartialEq)]
+enum ArrayFormat {
+    BCHW,
+    ND,
 }
